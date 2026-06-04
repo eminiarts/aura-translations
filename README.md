@@ -126,21 +126,72 @@ Only fields listed in `static $translatable` or marked with `'translatable' => t
 
 ## AI Translation
 
-AI Translation uses an OpenAI-compatible Chat Completions endpoint by default. Configure an API key in the environment:
+AI Translation uses an OpenAI-compatible Chat Completions endpoint by default. The button is shown in the translation-aware admin form for non-default locales.
+
+Configure an API key in the environment:
 
 ```dotenv
 OPENAI_API_KEY=sk-...
 ```
 
-Or use translation-specific settings:
+Or use translation-specific settings if the translation plugin should use a different key or provider:
 
 ```dotenv
 AURA_TRANSLATIONS_AI_API_KEY=sk-...
 AURA_TRANSLATIONS_AI_MODEL=gpt-4.1-mini
 AURA_TRANSLATIONS_AI_ENDPOINT=https://api.openai.com/v1/chat/completions
+AURA_TRANSLATIONS_AI_TIMEOUT=45
+AURA_TRANSLATIONS_AI_TEMPERATURE=0.2
+AURA_TRANSLATIONS_AI_ENABLED=true
 ```
 
-The admin UI sends only configured translatable fields. Editors review the source values, raw JSON response, and editable suggestions before approving them into the Livewire form.
+The available config keys are:
+
+| Config | Environment | Default |
+|--------|-------------|---------|
+| `ai.enabled` | `AURA_TRANSLATIONS_AI_ENABLED` | `true` |
+| `ai.api_key` | `AURA_TRANSLATIONS_AI_API_KEY` or `OPENAI_API_KEY` | `null` |
+| `ai.endpoint` | `AURA_TRANSLATIONS_AI_ENDPOINT` | `https://api.openai.com/v1/chat/completions` |
+| `ai.model` | `AURA_TRANSLATIONS_AI_MODEL` | `gpt-4.1-mini` |
+| `ai.timeout` | `AURA_TRANSLATIONS_AI_TIMEOUT` | `45` |
+| `ai.temperature` | `AURA_TRANSLATIONS_AI_TEMPERATURE` | `0.2` |
+
+When an editor clicks **AI Translation**, the admin UI sends only configured translatable fields to Aura's authenticated admin endpoint. Non-translatable fields are filtered out server-side before the LLM request is made.
+
+The request sent to the LLM contains a JSON object like this:
+
+```json
+{
+    "source_locale": "en",
+    "target_locale": "de",
+    "fields": {
+        "title": "Original title",
+        "overview": "Original overview"
+    },
+    "field_meta": {
+        "title": {
+            "name": "Title",
+            "type": "Aura\\Base\\Fields\\Text"
+        }
+    }
+}
+```
+
+The AI response is expected to include a `translations` object with the same field keys:
+
+```json
+{
+    "translations": {
+        "title": "Deutscher Titel",
+        "overview": "Deutsche Beschreibung"
+    },
+    "notes": ""
+}
+```
+
+Editors review the source values, raw JSON exchange, and editable suggestions before approving them into the Livewire form. The translated values are not saved until the resource form itself is saved.
+
+The default endpoint uses OpenAI's JSON schema response format. Other providers can be used when they support the same Chat Completions request shape and JSON response behavior.
 
 ## Validation
 
