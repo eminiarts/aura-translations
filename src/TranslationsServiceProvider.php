@@ -2,6 +2,7 @@
 
 namespace Aura\Translations;
 
+use Aura\Translations\Services\AiTranslationService;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -13,7 +14,13 @@ class TranslationsServiceProvider extends PackageServiceProvider
             ->name('aura-translations')
             ->hasConfigFile('aura-translations')
             ->hasViews('aura-translations')
+            ->hasRoutes('web')
             ->hasMigration('create_aura_translations_table');
+    }
+
+    public function packageRegistered(): void
+    {
+        $this->app->singleton(AiTranslationService::class);
     }
 
     public function packageBooted(): void

@@ -52,6 +52,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | AI Translation
+    |--------------------------------------------------------------------------
+    |
+    | The default provider is OpenAI-compatible Chat Completions, so it can also
+    | be pointed at other LLM providers that expose the same JSON API shape.
+    |
+    */
+
+    'ai' => [
+        'enabled' => env('AURA_TRANSLATIONS_AI_ENABLED', true),
+        'provider' => env('AURA_TRANSLATIONS_AI_PROVIDER', 'openai_compatible'),
+        'api_key' => env('AURA_TRANSLATIONS_AI_API_KEY', env('OPENAI_API_KEY')),
+        'endpoint' => env('AURA_TRANSLATIONS_AI_ENDPOINT', 'https://api.openai.com/v1/chat/completions'),
+        'model' => env('AURA_TRANSLATIONS_AI_MODEL', 'gpt-4.1-mini'),
+        'timeout' => env('AURA_TRANSLATIONS_AI_TIMEOUT', 45),
+        'temperature' => env('AURA_TRANSLATIONS_AI_TEMPERATURE', 0.2),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Field Types
     |--------------------------------------------------------------------------
     |

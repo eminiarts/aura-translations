@@ -119,9 +119,28 @@ When a resource uses `HasTranslations`, Aura uses translation-aware create/edit 
 - A compact language switcher for configured locales.
 - A translation status control for non-default locales.
 - A copy action to copy default-locale field values into the active translation.
+- An AI Translation action that sends the source strings as JSON, shows the returned JSON, and lets editors approve or adjust suggested translations.
 - A subtle translation indicator on fields that are multilingual.
 
 Only fields listed in `static $translatable` or marked with `'translatable' => true` receive translated inputs.
+
+## AI Translation
+
+AI Translation uses an OpenAI-compatible Chat Completions endpoint by default. Configure an API key in the environment:
+
+```dotenv
+OPENAI_API_KEY=sk-...
+```
+
+Or use translation-specific settings:
+
+```dotenv
+AURA_TRANSLATIONS_AI_API_KEY=sk-...
+AURA_TRANSLATIONS_AI_MODEL=gpt-4.1-mini
+AURA_TRANSLATIONS_AI_ENDPOINT=https://api.openai.com/v1/chat/completions
+```
+
+The admin UI sends only configured translatable fields. Editors review the source values, raw JSON response, and editable suggestions before approving them into the Livewire form.
 
 ## Validation
 

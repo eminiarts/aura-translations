@@ -3,6 +3,16 @@
     $defaultLocale = $model->translationDefaultLocale();
     $translatableSlugs = $model->getTranslatableFieldSlugs();
     $fieldSlugs = collect($translatableSlugs)->values()->all();
+    $fieldMeta = $model->fieldsCollection()
+        ->filter(fn ($field) => isset($field['slug']) && in_array($field['slug'], $translatableSlugs, true))
+        ->mapWithKeys(fn ($field) => [
+            $field['slug'] => [
+                'name' => __($field['name'] ?? $field['slug']),
+                'type' => $field['type'] ?? '',
+            ],
+        ])
+        ->all();
+    $resourceId = ($model->exists ?? false) ? $model->getKey() : null;
     $markTranslatableFields = function ($fields) use (&$markTranslatableFields, $translatableSlugs) {
         return collect($fields)->map(function ($field) use (&$markTranslatableFields, $translatableSlugs) {
             if (isset($field['slug']) && in_array($field['slug'], $translatableSlugs, true)) {
@@ -29,11 +39,128 @@
 <div
     x-data="{
         activeLocale: @js($defaultLocale),
+        aiEndpoint: @js(route('aura.translations.ai.translate')),
+        csrf: document.querySelector('meta[name=\'csrf-token\']')?.getAttribute('content'),
+        defaultLocale: @js($defaultLocale),
+        fieldSlugs: @js($fieldSlugs),
+        fieldMeta: @js($fieldMeta),
+        resourceSlug: @js($model->getSlug()),
+        resourceId: @js($resourceId),
+        ai: {
+            open: false,
+            loading: false,
+            phase: 'idle',
+            locale: null,
+            error: null,
+            fields: [],
+            sentPayload: null,
+            rawResponse: null,
+        },
         copyFromDefault(locale) {
-            const fields = @js($fieldSlugs);
-            fields.forEach((slug) => {
+            this.fieldSlugs.forEach((slug) => {
                 this.$wire.set(`form.fields.translations.${locale}.values.${slug}`, this.$wire.get(`form.fields.${slug}`));
             });
+        },
+        buildAiFields(locale) {
+            return this.fieldSlugs
+                .map((slug) => {
+                    const source = this.$wire.get(`form.fields.${slug}`) ?? '';
+                    const existing = this.$wire.get(`form.fields.translations.${locale}.values.${slug}`) ?? '';
+
+                    return {
+                        slug: slug,
+                        label: this.fieldMeta[slug]?.name || slug,
+                        source: source,
+                        target: existing,
+                    };
+                })
+                .filter((field) => String(field.source).trim() !== '');
+        },
+        async translateWithAi(locale) {
+            const fields = this.buildAiFields(locale);
+
+            this.ai = {
+                open: true,
+                loading: false,
+                phase: 'prepared',
+                locale: locale,
+                error: null,
+                fields: fields,
+                sentPayload: null,
+                rawResponse: null,
+            };
+
+            if (fields.length === 0) {
+                this.ai.error = @js(__('Add source text before requesting an AI translation.'));
+                this.ai.phase = 'error';
+
+                return;
+            }
+
+            const payload = {
+                resource_slug: this.resourceSlug,
+                resource_id: this.resourceId,
+                source_locale: this.defaultLocale,
+                target_locale: locale,
+                fields: Object.fromEntries(fields.map((field) => [field.slug, field.source])),
+                field_meta: this.fieldMeta,
+            };
+
+            this.ai.sentPayload = payload;
+            this.ai.loading = true;
+            this.ai.phase = 'requesting';
+
+            try {
+                const response = await fetch(this.aiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (! response.ok) {
+                    const message = data.message || Object.values(data.errors || {})?.flat()?.[0] || @js(__('AI translation failed.'));
+                    throw new Error(message);
+                }
+
+                this.ai.sentPayload = data.request_payload || payload;
+                this.ai.rawResponse = data.raw_response || data;
+                this.ai.fields = fields.map((field) => ({
+                    ...field,
+                    target: data.translations?.[field.slug] ?? field.target,
+                }));
+                this.ai.phase = 'review';
+            } catch (error) {
+                this.ai.error = error.message || @js(__('AI translation failed.'));
+                this.ai.phase = 'error';
+            } finally {
+                this.ai.loading = false;
+            }
+        },
+        approveAiTranslation() {
+            this.ai.fields.forEach((field) => {
+                this.$wire.set(`form.fields.translations.${this.ai.locale}.values.${field.slug}`, field.target ?? '');
+            });
+
+            this.$dispatch('notify', {
+                type: 'success',
+                message: @js(__('AI translations applied.')),
+            });
+
+            this.closeAiTranslation();
+        },
+        closeAiTranslation() {
+            this.ai.open = false;
+        },
+        formattedAiPayload() {
+            return JSON.stringify(this.ai.sentPayload || {}, null, 2);
+        },
+        formattedAiResponse() {
+            return JSON.stringify(this.ai.rawResponse || {}, null, 2);
         }
     }"
     data-aura-translations
@@ -60,15 +187,19 @@
             @endforeach
         </div>
 
-        <div class="relative min-h-10 w-20">
+        <div class="relative min-h-10 w-48">
             @foreach ($locales as $locale => $label)
                 @if ($locale !== $defaultLocale)
                     <div
                         x-bind:class="activeLocale === @js($locale) ? 'opacity-100' : 'pointer-events-none opacity-0'"
-                        class="absolute inset-y-0 right-0 flex items-center justify-end transition"
+                        class="absolute inset-y-0 right-0 flex items-center justify-end gap-1 transition"
                     >
                         <button type="button" title="{{ __('Copy from default') }}" data-copy-from-default="{{ $locale }}" x-on:click="copyFromDefault(@js($locale))" class="rounded-md px-2.5 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/20">
                             {{ __('Copy') }}
+                        </button>
+
+                        <button type="button" title="{{ __('Translate with AI') }}" data-ai-translate-button="{{ $locale }}" x-on:click="translateWithAi(@js($locale))" class="rounded-md px-2.5 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/20">
+                            {{ __('AI Translation') }}
                         </button>
                     </div>
                 @endif
@@ -112,5 +243,139 @@
             'defaultLocale' => $defaultLocale,
             'translatableSlugs' => $translatableSlugs,
         ])
+    </div>
+
+    <div
+        x-show="ai.open"
+        x-cloak
+        data-ai-translation-modal
+        x-transition.opacity
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-translation-title"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 p-3 backdrop-blur-sm sm:p-6"
+        x-on:click.self="closeAiTranslation()"
+        x-on:keydown.escape.window="closeAiTranslation()"
+    >
+        <div
+            x-transition:enter="transition duration-150 ease-out"
+            x-transition:enter-start="translate-y-2 scale-[0.98] opacity-0"
+            x-transition:enter-end="translate-y-0 scale-100 opacity-100"
+            x-transition:leave="transition duration-100 ease-in"
+            x-transition:leave-start="translate-y-0 scale-100 opacity-100"
+            x-transition:leave-end="translate-y-1 scale-[0.98] opacity-0"
+            class="flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ring-1 ring-gray-950/10 dark:bg-gray-950 dark:ring-white/10"
+            data-ai-translation-panel
+        >
+            <div class="border-b border-gray-200 px-6 py-5 dark:border-gray-800">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 id="ai-translation-title" class="text-base font-semibold tracking-normal text-gray-950 dark:text-gray-50">{{ __('AI Translation') }}</h2>
+                            <span class="inline-flex items-center rounded-full border border-gray-200 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                                <span x-text="defaultLocale"></span>
+                                <span class="px-1 text-gray-300 dark:text-gray-600">/</span>
+                                <span x-text="ai.locale"></span>
+                            </span>
+                        </div>
+                        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-gray-400 dark:text-gray-500">
+                            <span class="inline-flex items-center gap-1.5" x-bind:class="['prepared', 'requesting', 'review'].includes(ai.phase) ? 'text-primary-600 dark:text-primary-400' : ''">
+                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                                {{ __('Prepared') }}
+                            </span>
+                            <span class="h-px w-8 bg-gray-200 dark:bg-gray-800"></span>
+                            <span class="inline-flex items-center gap-1.5" x-bind:class="['requesting', 'review'].includes(ai.phase) ? 'text-primary-600 dark:text-primary-400' : ''">
+                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                                {{ __('Requesting AI') }}
+                            </span>
+                            <span class="h-px w-8 bg-gray-200 dark:bg-gray-800"></span>
+                            <span class="inline-flex items-center gap-1.5" x-bind:class="ai.phase === 'review' ? 'text-primary-600 dark:text-primary-400' : ''">
+                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                                {{ __('Review') }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <button type="button" title="{{ __('Close') }}" x-on:click="closeAiTranslation()" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-900 dark:hover:text-gray-200">
+                        <span class="sr-only">{{ __('Close') }}</span>
+                        <x-aura::icon.close class="h-4 w-4" aria-hidden="true" />
+                    </button>
+                </div>
+            </div>
+
+            <div class="min-h-0 flex-1 overflow-y-auto bg-gray-50/60 px-6 py-5 dark:bg-gray-950">
+                <template x-if="ai.error">
+                    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300" data-ai-translation-error x-text="ai.error"></div>
+                </template>
+
+                <template x-if="ai.loading">
+                    <div class="mb-4 inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300" data-ai-translation-loading>
+                        <x-aura::icon.loading />
+                        <span>{{ __('Translating...') }}</span>
+                    </div>
+                </template>
+
+                <div class="space-y-3">
+                    <template x-for="field in ai.fields" x-bind:key="field.slug">
+                        <section class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900/60">
+                            <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+                                <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400" x-text="field.label"></h3>
+                                <span class="text-[11px] font-medium text-gray-400 dark:text-gray-500" x-text="field.slug"></span>
+                            </div>
+
+                            <div class="grid gap-0 md:grid-cols-2">
+                                <div class="border-b border-gray-100 p-4 md:border-b-0 md:border-r dark:border-gray-800">
+                                    <div class="mb-2 text-[11px] font-semibold uppercase text-gray-400 dark:text-gray-500">{{ __('Source') }}</div>
+                                    <div class="min-h-24 whitespace-pre-wrap rounded-md bg-gray-50 px-3 py-2.5 text-sm leading-6 text-gray-800 dark:bg-gray-950 dark:text-gray-100" data-ai-source-string x-text="field.source"></div>
+                                </div>
+
+                                <label class="block p-4">
+                                    <span class="mb-2 block text-[11px] font-semibold uppercase text-gray-400 dark:text-gray-500">{{ __('Translation') }}</span>
+                                    <textarea
+                                        x-model="field.target"
+                                        x-bind:rows="String(field.target || '').length > 140 ? 5 : 3"
+                                        data-ai-target-string
+                                        x-bind:aria-label="field.label + ' ' + @js(__('translation'))"
+                                        class="block min-h-24 w-full resize-y rounded-md border-gray-300 bg-white px-3 py-2.5 text-sm leading-6 text-gray-900 shadow-sm transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-primary-500"
+                                    ></textarea>
+                                </label>
+                            </div>
+                        </section>
+                    </template>
+                </div>
+
+                <details class="mt-4 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900/60">
+                    <summary class="cursor-pointer px-4 py-3 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ __('JSON exchange') }}</summary>
+                    <div class="grid gap-3 border-t border-gray-100 p-4 lg:grid-cols-2 dark:border-gray-800">
+                        <div>
+                            <div class="mb-2 text-[11px] font-semibold uppercase text-gray-400 dark:text-gray-500">{{ __('Sent') }}</div>
+                            <pre class="max-h-56 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-xs leading-5 text-gray-700 dark:bg-gray-950 dark:text-gray-200" data-ai-json-sent x-text="formattedAiPayload()"></pre>
+                        </div>
+
+                        <div>
+                            <div class="mb-2 text-[11px] font-semibold uppercase text-gray-400 dark:text-gray-500">{{ __('Received') }}</div>
+                            <pre class="max-h-56 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-xs leading-5 text-gray-700 dark:bg-gray-950 dark:text-gray-200" data-ai-json-response x-text="formattedAiResponse()"></pre>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-6 py-4 dark:border-gray-800 dark:bg-gray-950">
+                <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <span x-text="ai.fields.length"></span>
+                    <span>{{ __('strings ready') }}</span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button type="button" x-on:click="closeAiTranslation()" class="rounded-md px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-gray-100">
+                        {{ __('Cancel') }}
+                    </button>
+
+                    <button type="button" data-ai-approve-translation x-on:click="approveAiTranslation()" x-bind:disabled="ai.loading || ai.fields.length === 0 || ai.phase !== 'review'" class="rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        {{ __('Approve') }}
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
