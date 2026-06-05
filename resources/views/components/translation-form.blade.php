@@ -245,65 +245,38 @@
         ])
     </div>
 
-    <div
-        x-show="ai.open"
-        x-cloak
-        data-ai-translation-modal
-        x-transition.opacity
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ai-translation-title"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 p-3 backdrop-blur-sm sm:p-6"
-        x-on:click.self="closeAiTranslation()"
-        x-on:keydown.escape.window="closeAiTranslation()"
-    >
-        <div
-            x-transition:enter="transition duration-150 ease-out"
-            x-transition:enter-start="translate-y-2 scale-[0.98] opacity-0"
-            x-transition:enter-end="translate-y-0 scale-100 opacity-100"
-            x-transition:leave="transition duration-100 ease-in"
-            x-transition:leave-start="translate-y-0 scale-100 opacity-100"
-            x-transition:leave-end="translate-y-1 scale-[0.98] opacity-0"
-            class="flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ring-1 ring-gray-950/10 dark:bg-gray-950 dark:ring-white/10"
-            data-ai-translation-panel
-        >
-            <div class="border-b border-gray-200 px-6 py-5 dark:border-gray-800">
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <h2 id="ai-translation-title" class="text-base font-semibold tracking-normal text-gray-950 dark:text-gray-50">{{ __('AI Translation') }}</h2>
-                            <span class="inline-flex items-center rounded-full border border-gray-200 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                                <span x-text="defaultLocale"></span>
-                                <span class="px-1 text-gray-300 dark:text-gray-600">/</span>
-                                <span x-text="ai.locale"></span>
-                            </span>
-                        </div>
-                        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-gray-400 dark:text-gray-500">
-                            <span class="inline-flex items-center gap-1.5" x-bind:class="['prepared', 'requesting', 'review'].includes(ai.phase) ? 'text-primary-600 dark:text-primary-400' : ''">
-                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-                                {{ __('Prepared') }}
-                            </span>
-                            <span class="h-px w-8 bg-gray-200 dark:bg-gray-800"></span>
-                            <span class="inline-flex items-center gap-1.5" x-bind:class="['requesting', 'review'].includes(ai.phase) ? 'text-primary-600 dark:text-primary-400' : ''">
-                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-                                {{ __('Requesting AI') }}
-                            </span>
-                            <span class="h-px w-8 bg-gray-200 dark:bg-gray-800"></span>
-                            <span class="inline-flex items-center gap-1.5" x-bind:class="ai.phase === 'review' ? 'text-primary-600 dark:text-primary-400' : ''">
-                                <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-                                {{ __('Review') }}
-                            </span>
-                        </div>
+    <x-aura::dialog x-model="ai.open" data-ai-translation-modal>
+        <x-aura::dialog.panel :modalAttributes="['modalClasses' => 'max-w-5xl']">
+            <div data-ai-translation-panel>
+                <div class="pr-10">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <x-aura::dialog.title>{{ __('AI Translation') }}</x-aura::dialog.title>
+                        <span class="-mt-4 inline-flex items-center rounded-full border border-gray-200 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                            <span x-text="defaultLocale"></span>
+                            <span class="px-1 text-gray-300 dark:text-gray-600">/</span>
+                            <span x-text="ai.locale"></span>
+                        </span>
                     </div>
 
-                    <button type="button" title="{{ __('Close') }}" x-on:click="closeAiTranslation()" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-900 dark:hover:text-gray-200">
-                        <span class="sr-only">{{ __('Close') }}</span>
-                        <x-aura::icon.close class="h-4 w-4" aria-hidden="true" />
-                    </button>
+                    <div class="-mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-gray-400 dark:text-gray-500">
+                        <span class="inline-flex items-center gap-1.5" x-bind:class="['prepared', 'requesting', 'review'].includes(ai.phase) ? 'text-primary-600 dark:text-primary-400' : ''">
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                            {{ __('Prepared') }}
+                        </span>
+                        <span class="h-px w-8 bg-gray-200 dark:bg-gray-700"></span>
+                        <span class="inline-flex items-center gap-1.5" x-bind:class="['requesting', 'review'].includes(ai.phase) ? 'text-primary-600 dark:text-primary-400' : ''">
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                            {{ __('Requesting AI') }}
+                        </span>
+                        <span class="h-px w-8 bg-gray-200 dark:bg-gray-700"></span>
+                        <span class="inline-flex items-center gap-1.5" x-bind:class="ai.phase === 'review' ? 'text-primary-600 dark:text-primary-400' : ''">
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                            {{ __('Review') }}
+                        </span>
+                    </div>
                 </div>
-            </div>
 
-            <div class="min-h-0 flex-1 overflow-y-auto bg-gray-50/60 px-6 py-5 dark:bg-gray-950">
+                <div class="-mx-6 mt-5 max-h-[68vh] overflow-y-auto border-y border-gray-100 bg-gray-50/60 px-6 py-5 dark:border-gray-700 dark:bg-gray-900/40">
                 <template x-if="ai.error">
                     <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300" data-ai-translation-error x-text="ai.error"></div>
                 </template>
@@ -360,22 +333,27 @@
                 </details>
             </div>
 
-            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-6 py-4 dark:border-gray-800 dark:bg-gray-950">
-                <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                    <span x-text="ai.fields.length"></span>
-                    <span>{{ __('strings ready') }}</span>
-                </div>
+                <x-aura::dialog.footer>
+                    <div class="flex w-full flex-wrap items-center justify-between gap-3">
+                        <div class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                            <span x-text="ai.fields.length"></span>
+                            <span>{{ __('strings ready') }}</span>
+                        </div>
 
-                <div class="flex items-center gap-2">
-                    <button type="button" x-on:click="closeAiTranslation()" class="rounded-md px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-gray-100">
-                        {{ __('Cancel') }}
-                    </button>
+                        <div class="flex items-center gap-2">
+                            <x-aura::dialog.close>
+                                <x-aura::button.transparent type="button">
+                                    {{ __('Cancel') }}
+                                </x-aura::button.transparent>
+                            </x-aura::dialog.close>
 
-                    <button type="button" data-ai-approve-translation x-on:click="approveAiTranslation()" x-bind:disabled="ai.loading || ai.fields.length === 0 || ai.phase !== 'review'" class="rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">
-                        {{ __('Approve') }}
-                    </button>
-                </div>
+                            <x-aura::button.primary type="button" data-ai-approve-translation x-on:click="approveAiTranslation()" x-bind:disabled="ai.loading || ai.fields.length === 0 || ai.phase !== 'review'">
+                                {{ __('Approve') }}
+                            </x-aura::button.primary>
+                        </div>
+                    </div>
+                </x-aura::dialog.footer>
             </div>
-        </div>
-    </div>
+        </x-aura::dialog.panel>
+    </x-aura::dialog>
 </div>
