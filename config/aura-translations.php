@@ -13,6 +13,7 @@ return [
     'locales' => [
         'en' => 'English',
         'de' => 'Deutsch',
+        'fr' => 'Français',
     ],
 
     'default_locale' => env('AURA_TRANSLATIONS_DEFAULT_LOCALE', config('app.locale', 'en')),
