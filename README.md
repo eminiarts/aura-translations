@@ -2,12 +2,14 @@
 
 Aura Translations adds multilingual content editing to Aura CMS resources. It stores translated field values in a separate `aura_translations` table and replaces the default Aura create/edit forms with locale-aware forms.
 
+The current development version requires PHP 8.4+, Laravel 13, and Aura CMS 1.x.
+
 ## Installation
 
 Require the package:
 
 ```bash
-composer require eminiarts/aura-translations
+composer require eminiarts/aura-translations:dev-main
 ```
 
 If the package is not available on Packagist yet, add the GitHub repository to your application's `composer.json`:
@@ -29,7 +31,7 @@ To install the package into Aura's plugin folder instead of `vendor/`, add Compo
 {
     "require": {
         "oomphinc/composer-installers-extender": "^2.0",
-        "eminiarts/aura-translations": "^0.1.0"
+        "eminiarts/aura-translations": "dev-main"
     },
     "config": {
         "allow-plugins": {
